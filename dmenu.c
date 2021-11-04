@@ -18,6 +18,7 @@
 
 #include "drw.h"
 #include "util.h"
+#include "config.h"
 
 /* macros */
 #define INTERSECT(x,y,w,h,r)  (MAX(0, MIN((x)+(w),(r).x_org+(r).width)  - MAX((x),(r).x_org)) \
@@ -72,20 +73,20 @@ appenditem(struct item *item, struct item **list, struct item **last)
 }
 
 static void
-calcoffsets(void)
+calcoffsets(const Config* config)
 {
 	int i, n;
 
-	if (lines > 0)
-		n = lines * bh;
+	if (config->lines > 0)
+		n = config->lines * bh;
 	else
 		n = mw - (promptw + inputw + TEXTW("<") + TEXTW(">"));
 	/* calculate which items will begin the next page and previous page */
 	for (i = 0, next = curr; next; next = next->right)
-		if ((i += (lines > 0) ? bh : MIN(TEXTW(next->text), n)) > n)
+		if ((i += (config->lines > 0) ? bh : MIN(TEXTW(next->text), n)) > n)
 			break;
 	for (i = 0, prev = curr; prev && prev->left; prev = prev->left)
-		if ((i += (lines > 0) ? bh : MIN(TEXTW(prev->left->text), n)) > n)
+		if ((i += (config->lines > 0) ? bh : MIN(TEXTW(prev->left->text), n)) > n)
 			break;
 }
 
@@ -127,7 +128,7 @@ drawitem(struct item *item, int x, int y, int w)
 }
 
 static void
-drawmenu(void)
+drawmenu(const Config* config)
 {
 	unsigned int curpos;
 	struct item *item;
@@ -136,12 +137,12 @@ drawmenu(void)
 	drw_setscheme(drw, scheme[SchemeNorm]);
 	drw_rect(drw, 0, 0, mw, mh, 1, 1);
 
-	if (prompt && *prompt) {
+	if (config->prompt.len) {
 		drw_setscheme(drw, scheme[SchemeSel]);
-		x = drw_text(drw, x, 0, promptw, bh, lrpad / 2, prompt, 0);
+		x = drw_text(drw, x, 0, promptw, bh, lrpad / 2, config->prompt.data, 0);
 	}
 	/* draw input field */
-	w = (lines > 0 || !matches) ? mw - x : inputw;
+	w = (config->lines > 0 || !matches) ? mw - x : inputw;
 	drw_setscheme(drw, scheme[SchemeNorm]);
 	drw_text(drw, x, 0, w, bh, lrpad / 2, text, 0);
 
@@ -151,7 +152,7 @@ drawmenu(void)
 		drw_rect(drw, x + curpos, 2, 2, bh - 4, 1, 0);
 	}
 
-	if (lines > 0) {
+	if (config->lines > 0) {
 		/* draw vertical list */
 		for (item = curr; item != next; item = item->right)
 			drawitem(item, x, y += bh, mw - x);
@@ -211,7 +212,7 @@ grabkeyboard(void)
 }
 
 static void
-match(void)
+match(const Config* config)
 {
 	static char **tokv = NULL;
 	static int tokn = 0;
@@ -261,11 +262,11 @@ match(void)
 		matchend = substrend;
 	}
 	curr = sel = matches;
-	calcoffsets();
+	calcoffsets(config);
 }
 
 static void
-insert(const char *str, ssize_t n)
+insert(Config* config, const char *str, ssize_t n)
 {
 	if (strlen(text) + n > sizeof text - 1)
 		return;
@@ -274,7 +275,7 @@ insert(const char *str, ssize_t n)
 	if (n > 0)
 		memcpy(&text[cursor], str, n);
 	cursor += n;
-	match();
+	match(config);
 }
 
 static size_t
@@ -289,23 +290,23 @@ nextrune(int inc)
 }
 
 static void
-movewordedge(int dir)
+movewordedge(const Config* config, int dir)
 {
 	if (dir < 0) { /* move cursor to the start of the word*/
-		while (cursor > 0 && strchr(worddelimiters, text[nextrune(-1)]))
+		while (cursor > 0 && strchr(config->worddelimiters.data, text[nextrune(-1)]))
 			cursor = nextrune(-1);
-		while (cursor > 0 && !strchr(worddelimiters, text[nextrune(-1)]))
+		while (cursor > 0 && !strchr(config->worddelimiters.data, text[nextrune(-1)]))
 			cursor = nextrune(-1);
 	} else { /* move cursor to the end of the word */
-		while (text[cursor] && strchr(worddelimiters, text[cursor]))
+		while (text[cursor] && strchr(config->worddelimiters.data, text[cursor]))
 			cursor = nextrune(+1);
-		while (text[cursor] && !strchr(worddelimiters, text[cursor]))
+		while (text[cursor] && !strchr(config->worddelimiters.data, text[cursor]))
 			cursor = nextrune(+1);
 	}
 }
 
 static void
-keypress(XKeyEvent *ev)
+keypress(Config* config, XKeyEvent *ev)
 {
 	char buf[32];
 	int len;
@@ -343,16 +344,16 @@ keypress(XKeyEvent *ev)
 
 		case XK_k: /* delete right */
 			text[cursor] = '\0';
-			match();
+			match(config);
 			break;
 		case XK_u: /* delete left */
-			insert(NULL, 0 - cursor);
+			insert(config, NULL, 0 - cursor);
 			break;
 		case XK_w: /* delete word */
-			while (cursor > 0 && strchr(worddelimiters, text[nextrune(-1)]))
-				insert(NULL, nextrune(-1) - cursor);
-			while (cursor > 0 && !strchr(worddelimiters, text[nextrune(-1)]))
-				insert(NULL, nextrune(-1) - cursor);
+			while (cursor > 0 && strchr(config->worddelimiters.data, text[nextrune(-1)]))
+				insert(config, NULL, nextrune(-1) - cursor);
+			while (cursor > 0 && !strchr(config->worddelimiters.data, text[nextrune(-1)]))
+				insert(config, NULL, nextrune(-1) - cursor);
 			break;
 		case XK_y: /* paste selection */
 		case XK_Y:
@@ -361,11 +362,11 @@ keypress(XKeyEvent *ev)
 			return;
 		case XK_Left:
 		case XK_KP_Left:
-			movewordedge(-1);
+			movewordedge(config, -1);
 			goto draw;
 		case XK_Right:
 		case XK_KP_Right:
-			movewordedge(+1);
+			movewordedge(config, +1);
 			goto draw;
 		case XK_Return:
 		case XK_KP_Enter:
@@ -379,10 +380,10 @@ keypress(XKeyEvent *ev)
 	} else if (ev->state & Mod1Mask) {
 		switch(ksym) {
 		case XK_b:
-			movewordedge(-1);
+			movewordedge(config, -1);
 			goto draw;
 		case XK_f:
-			movewordedge(+1);
+			movewordedge(config, +1);
 			goto draw;
 		case XK_g: ksym = XK_Home;  break;
 		case XK_G: ksym = XK_End;   break;
@@ -399,7 +400,7 @@ keypress(XKeyEvent *ev)
 	default:
 insert:
 		if (!iscntrl(*buf))
-			insert(buf, len);
+			insert(config, buf, len);
 		break;
 	case XK_Delete:
 	case XK_KP_Delete:
@@ -410,7 +411,7 @@ insert:
 	case XK_BackSpace:
 		if (cursor == 0)
 			return;
-		insert(NULL, nextrune(-1) - cursor);
+		insert(config, NULL, nextrune(-1) - cursor);
 		break;
 	case XK_End:
 	case XK_KP_End:
@@ -421,11 +422,11 @@ insert:
 		if (next) {
 			/* jump to end of list and position items in reverse */
 			curr = matchend;
-			calcoffsets();
+			calcoffsets(config);
 			curr = prev;
-			calcoffsets();
+			calcoffsets(config);
 			while (next && (curr = curr->right))
-				calcoffsets();
+				calcoffsets(config);
 		}
 		sel = matchend;
 		break;
@@ -439,22 +440,22 @@ insert:
 			break;
 		}
 		sel = curr = matches;
-		calcoffsets();
+		calcoffsets(config);
 		break;
 	case XK_Left:
 	case XK_KP_Left:
-		if (cursor > 0 && (!sel || !sel->left || lines > 0)) {
+		if (cursor > 0 && (!sel || !sel->left || config->lines > 0)) {
 			cursor = nextrune(-1);
 			break;
 		}
-		if (lines > 0)
+		if (config->lines > 0)
 			return;
 		/* fallthrough */
 	case XK_Up:
 	case XK_KP_Up:
 		if (sel && sel->left && (sel = sel->left)->right == curr) {
 			curr = prev;
-			calcoffsets();
+			calcoffsets(config);
 		}
 		break;
 	case XK_Next:
@@ -462,14 +463,14 @@ insert:
 		if (!next)
 			return;
 		sel = curr = next;
-		calcoffsets();
+		calcoffsets(config);
 		break;
 	case XK_Prior:
 	case XK_KP_Prior:
 		if (!prev)
 			return;
 		sel = curr = prev;
-		calcoffsets();
+		calcoffsets(config);
 		break;
 	case XK_Return:
 	case XK_KP_Enter:
@@ -487,14 +488,14 @@ insert:
 			cursor = nextrune(+1);
 			break;
 		}
-		if (lines > 0)
+		if (config->lines > 0)
 			return;
 		/* fallthrough */
 	case XK_Down:
 	case XK_KP_Down:
 		if (sel && sel->right && (sel = sel->right) == next) {
 			curr = next;
-			calcoffsets();
+			calcoffsets(config);
 		}
 		break;
 	case XK_Tab:
@@ -503,16 +504,16 @@ insert:
 		strncpy(text, sel->text, sizeof text - 1);
 		text[sizeof text - 1] = '\0';
 		cursor = strlen(text);
-		match();
+		match(config);
 		break;
 	}
 
 draw:
-	drawmenu();
+	drawmenu(config);
 }
 
 static void
-paste(void)
+paste(Config* config)
 {
 	char *p, *q;
 	int di;
@@ -523,14 +524,14 @@ paste(void)
 	if (XGetWindowProperty(dpy, win, utf8, 0, (sizeof text / 4) + 1, False,
 	                   utf8, &da, &di, &dl, &dl, (unsigned char **)&p)
 	    == Success && p) {
-		insert(p, (q = strchr(p, '\n')) ? q - p : (ssize_t)strlen(p));
+		insert(config, p, (q = strchr(p, '\n')) ? q - p : (ssize_t)strlen(p));
 		XFree(p);
 	}
-	drawmenu();
+	drawmenu(config);
 }
 
 static void
-readstdin(void)
+readstdin(Config* config)
 {
 	char buf[sizeof text], *p;
 	size_t i, imax = 0, size = 0;
@@ -555,11 +556,11 @@ readstdin(void)
 	if (items)
 		items[i].text = NULL;
 	inputw = items ? TEXTW(items[imax].text) : 0;
-	lines = MIN(lines, i);
+	config->lines = MIN(config->lines, i);
 }
 
 static void
-run(void)
+run(const Config* config)
 {
 	XEvent ev;
 
@@ -582,11 +583,11 @@ run(void)
 				grabfocus();
 			break;
 		case KeyPress:
-			keypress(&ev.xkey);
+			keypress(config, &ev.xkey);
 			break;
 		case SelectionNotify:
 			if (ev.xselection.property == utf8)
-				paste();
+				paste(config);
 			break;
 		case VisibilityNotify:
 			if (ev.xvisibility.state != VisibilityUnobscured)
@@ -597,7 +598,7 @@ run(void)
 }
 
 static void
-setup(void)
+setup(Config* config)
 {
 	int x, y, i, j;
 	unsigned int du;
@@ -612,16 +613,29 @@ setup(void)
 	int a, di, n, area = 0;
 #endif
 	/* init appearance */
-	for (j = 0; j < SchemeLast; j++)
-		scheme[j] = drw_scm_create(drw, colors[j], 2);
+	/*for (j = 0; j < SchemeLast; j++)*/
+		/*scheme[j] = drw_scm_create(drw, colors[j], 2);*/
+
+  /*
+   * @Change(emf)
+   * drw_scm_create: needs list of colors, say colors[SchemeNorm] which will give it { "..", ".." }
+   */
+  const char* SchemeNorm_arr[] = config_colorsGetCArray(*config, SchemeNorm);
+  const char* SchemeSel_arr[] = config_colorsGetCArray(*config, SchemeSel);
+  const char* SchemeOut_arr[] = config_colorsGetCArray(*config, SchemeOut);
+
+  scheme[0] = drw_scm_create(drw, SchemeNorm_arr, 2);
+  scheme[1] = drw_scm_create(drw, SchemeSel_arr, 2);
+  scheme[2] = drw_scm_create(drw, SchemeOut_arr, 2);
+
 
 	clip = XInternAtom(dpy, "CLIPBOARD",   False);
 	utf8 = XInternAtom(dpy, "UTF8_STRING", False);
 
 	/* calculate menu geometry */
 	bh = drw->fonts->h + 2;
-	lines = MAX(lines, 0);
-	mh = (lines + 1) * bh;
+	config->lines = MAX(config->lines, 0);
+	mh = (config->lines + 1) * bh;
 #ifdef XINERAMA
 	i = 0;
 	if (parentwin == root && (info = XineramaQueryScreens(dpy, &n))) {
@@ -649,7 +663,7 @@ setup(void)
 					break;
 
 		x = info[i].x_org;
-		y = info[i].y_org + (topbar ? 0 : info[i].height - mh);
+		y = info[i].y_org + (config->topbar ? 0 : info[i].height - mh);
 		mw = info[i].width;
 		XFree(info);
 	} else
@@ -659,12 +673,12 @@ setup(void)
 			die("could not get embedding window attributes: 0x%lx",
 			    parentwin);
 		x = 0;
-		y = topbar ? 0 : wa.height - mh;
+		y = config->topbar ? 0 : wa.height - mh;
 		mw = wa.width;
 	}
-	promptw = (prompt && *prompt) ? TEXTW(prompt) - lrpad / 4 : 0;
+	promptw = (config->prompt.data && *(config->prompt.data)) ? TEXTW(config->prompt.data) - lrpad / 4 : 0;
 	inputw = MIN(inputw, mw/3);
-	match();
+	match(config);
 
 	/* create menu window */
 	swa.override_redirect = True;
@@ -694,7 +708,7 @@ setup(void)
 		grabfocus();
 	}
 	drw_resize(drw, mw, mh);
-	drawmenu();
+	drawmenu(config);
 }
 
 static void
@@ -708,6 +722,16 @@ usage(void)
 int
 main(int argc, char *argv[])
 {
+
+  Config config;
+  if (read_config(&config) < 0) {
+      // emf:
+      //
+
+      fprintf(stderr, "Err: Failure loading ./config.lua\n");
+      exit(1);
+  }
+
 	XWindowAttributes wa;
 	int i, fast = 0;
 
@@ -716,32 +740,32 @@ main(int argc, char *argv[])
 		if (!strcmp(argv[i], "-v")) {      /* prints version information */
 			puts("dmenu-"VERSION);
 			exit(0);
-		} else if (!strcmp(argv[i], "-b")) /* appears at the bottom of the screen */
-			topbar = 0;
-		else if (!strcmp(argv[i], "-f"))   /* grabs keyboard before reading stdin */
-			fast = 1;
-		else if (!strcmp(argv[i], "-i")) { /* case-insensitive item matching */
+		/*} else if (!strcmp(argv[i], "-b")) [> appears at the bottom of the screen <]*/
+			/*topbar = 0;*/
+		/*else if (!strcmp(argv[i], "-f"))   [> grabs keyboard before reading stdin <]*/
+			/*fast = 1;*/
+    } else if (!strcmp(argv[i], "-i")) { /* case-insensitive item matching */
 			fstrncmp = strncasecmp;
 			fstrstr = cistrstr;
 		} else if (i + 1 == argc)
 			usage();
 		/* these options take one argument */
-		else if (!strcmp(argv[i], "-l"))   /* number of lines in vertical list */
-			lines = atoi(argv[++i]);
+		/*else if (!strcmp(argv[i], "-l"))   [> number of lines in vertical list <]*/
+			/*lines = atoi(argv[++i]);*/
 		else if (!strcmp(argv[i], "-m"))
 			mon = atoi(argv[++i]);
-		else if (!strcmp(argv[i], "-p"))   /* adds prompt to left of input field */
-			prompt = argv[++i];
-		else if (!strcmp(argv[i], "-fn"))  /* font or font set */
-			fonts[0] = argv[++i];
-		else if (!strcmp(argv[i], "-nb"))  /* normal background color */
-			colors[SchemeNorm][ColBg] = argv[++i];
-		else if (!strcmp(argv[i], "-nf"))  /* normal foreground color */
-			colors[SchemeNorm][ColFg] = argv[++i];
-		else if (!strcmp(argv[i], "-sb"))  /* selected background color */
-			colors[SchemeSel][ColBg] = argv[++i];
-		else if (!strcmp(argv[i], "-sf"))  /* selected foreground color */
-			colors[SchemeSel][ColFg] = argv[++i];
+		/*else if (!strcmp(argv[i], "-p"))   [> adds prompt to left of input field <]*/
+			/*prompt = argv[++i];*/
+		/*else if (!strcmp(argv[i], "-fn"))  [> font or font set <]*/
+			/*fonts[0] = argv[++i];*/
+		/*else if (!strcmp(argv[i], "-nb"))  [> normal background color <]*/
+			/*colors[SchemeNorm][ColBg] = argv[++i];*/
+		/*else if (!strcmp(argv[i], "-nf"))  [> normal foreground color <]*/
+			/*colors[SchemeNorm][ColFg] = argv[++i];*/
+		/*else if (!strcmp(argv[i], "-sb"))  [> selected background color <]*/
+			/*colors[SchemeSel][ColBg] = argv[++i];*/
+		/*else if (!strcmp(argv[i], "-sf"))  [> selected foreground color <]*/
+			/*colors[SchemeSel][ColFg] = argv[++i];*/
 		else if (!strcmp(argv[i], "-w"))   /* embedding window id */
 			embed = argv[++i];
 		else
@@ -759,6 +783,13 @@ main(int argc, char *argv[])
 		die("could not get embedding window attributes: 0x%lx",
 		    parentwin);
 	drw = drw_create(dpy, screen, root, wa.width, wa.height);
+
+  /* emf
+   * Make const char* fonts[] = { .. }
+   * for drw_fontset_create
+   */
+  char* fonts[] = { config.Fonts.fonts[0].data };
+
 	if (!drw_fontset_create(drw, fonts, LENGTH(fonts)))
 		die("no fonts could be loaded.");
 	lrpad = drw->fonts->h;
@@ -770,13 +801,15 @@ main(int argc, char *argv[])
 
 	if (fast && !isatty(0)) {
 		grabkeyboard();
-		readstdin();
+		readstdin(&config);
 	} else {
-		readstdin();
+		readstdin(&config);
 		grabkeyboard();
 	}
-	setup();
-	run();
+	setup(&config);
+	run(&config);
+
+  config_free(&config);
 
 	return 1; /* unreachable */
 }
