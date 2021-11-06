@@ -19,6 +19,7 @@
 #include "drw.h"
 #include "util.h"
 #include "config.h"
+#include "string.h"
 
 /* macros */
 #define INTERSECT(x,y,w,h,r)  (MAX(0, MIN((x)+(w),(r).x_org+(r).width)  - MAX((x),(r).x_org)) \
@@ -617,7 +618,7 @@ setup(Config* config)
 		/*scheme[j] = drw_scm_create(drw, colors[j], 2);*/
 
   /*
-   * @Change(emf)
+   * @Changes(emf)
    * drw_scm_create: needs list of colors, say colors[SchemeNorm] which will give it { "..", ".." }
    */
   const char* SchemeNorm_arr[] = config_colorsGetCArray(*config, SchemeNorm);
@@ -627,7 +628,6 @@ setup(Config* config)
   scheme[0] = drw_scm_create(drw, SchemeNorm_arr, 2);
   scheme[1] = drw_scm_create(drw, SchemeSel_arr, 2);
   scheme[2] = drw_scm_create(drw, SchemeOut_arr, 2);
-
 
 	clip = XInternAtom(dpy, "CLIPBOARD",   False);
 	utf8 = XInternAtom(dpy, "UTF8_STRING", False);
@@ -719,19 +719,53 @@ usage(void)
 	exit(1);
 }
 
+static String mk_path(const char* path, int psize, const char* fileName, int fsize) {
+    size_t buff_size = psize + fsize + 2;
+    char buff[buff_size];
+    snprintf(buff, buff_size, "%s/%s", path, fileName);
+    return string_alloc(buff);
+}
+
 int
 main(int argc, char *argv[])
 {
 
-  Config config;
-  if (read_config(&config) < 0) {
-      // emf:
-      //
+  /* @Changes(emf)
+   * Checks config file in $XDG_CONFIG_HOME
+   * Or read from default config from /usr/local/share/dmenu/config.lua
+   */
+  const char* config_fileName = "config.lua";
+  const char* config_rootPath = getenv("XDG_CONFIG_HOME");
 
-      fprintf(stderr, "Err: Failure loading ./config.lua\n");
+  Config config;
+  String config_filePath;
+  ConfigResult result;
+
+  if (config_rootPath) {
+      config_filePath = mk_path(config_rootPath, strlen(config_rootPath), config_fileName, strlen(config_fileName));
+      if (access(config_filePath.data, F_OK) != 0) goto dmenu_readFile_default;
+      goto dmenu_readFile;
+  }
+
+dmenu_readFile_default:
+    string_free(&config_filePath);  
+    config_rootPath = "/usr/local/share/dmenu";
+    config_filePath = mk_path(config_rootPath, strlen(config_rootPath), config_fileName, strlen(config_fileName));
+
+dmenu_readFile:
+  result = read_config(&config, config_filePath.data);
+  if (result != ConfigResult_SUCCESS) {
+      fprintf(stderr, "Err(emf): Reading %s: %s\n", config_filePath.data, ConfigResult_toString(result));
+
+      string_free(&config_filePath);
+      config_free(&config);
       exit(1);
   }
 
+  string_free(&config_filePath);
+
+  // ------------ Main ---------------
+  //
 	XWindowAttributes wa;
 	int i, fast = 0;
 
@@ -784,13 +818,19 @@ main(int argc, char *argv[])
 		    parentwin);
 	drw = drw_create(dpy, screen, root, wa.width, wa.height);
 
-  /* emf
-   * Make const char* fonts[] = { .. }
-   * for drw_fontset_create
+  /* @Changes(emf)
+   * Check if we have fonts
+   * Make const char* fonts[] = { .. } for drw_fontset_create
    */
-  char* fonts[] = { config.Fonts.fonts[0].data };
+  if (! config.Fonts.is_fonts) {
+      fprintf(stderr, "Err(emf): no fonts specified");
+      config_free(&config);
+      exit(1);
+  }
 
-	if (!drw_fontset_create(drw, fonts, LENGTH(fonts)))
+  const char* fonts[] = { config.Fonts.fonts[0].data };
+
+	if (!drw_fontset_create(drw, fonts, 1))
 		die("no fonts could be loaded.");
 	lrpad = drw->fonts->h;
 

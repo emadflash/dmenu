@@ -10,6 +10,7 @@
 
 #include <stdio.h>
 #include <string.h>
+#include <stdbool.h>
 
 #include "string.h"
 #include "external/lua/include/lua.h"
@@ -20,14 +21,30 @@
 #define strcmp_withoutCase(X, Y) (strcasecmp(X, Y) == 0)
 #define config_colorsGetCArray(X, Y) { (X).Colors.Y[0].data, (X).Colors.Y[1].data }
 
-static const char* keys[6] = { "topbar", "fonts", "prompt", "colors", "lines", "worddelimiters" };
+/*
+ * ConfigResult
+ */
+typedef enum {
+    ConfigResult_SUCCESS,
+    ConfigResult_InvaildOption,
+    ConfigResult_MissingOption,
+    ConfigResult_FailedToRead,
+    ConfigResult_MainDmenuCTxNotTable,
+} ConfigResult;
 
+extern const char* ConfigResult_toString(const ConfigResult result);
+
+/*
+ * Config
+ */
+static const char* keys[6] = { "topbar", "fonts", "prompt", "colors", "lines", "worddelimiters" };
 typedef struct {
     uint8_t topbar;
 
     struct {
         String* fonts;
         size_t len;
+        bool is_fonts;
     } Fonts;
 
     String prompt;
@@ -45,7 +62,7 @@ typedef struct {
 extern void config_free(Config* config);
 extern void config_parseFonts(Config* config, lua_State* lua, int idx);
 extern void config_parseColors(Config* config, lua_State* lua, int idx);
-extern Config config_parse(lua_State* lua);
-extern int read_config(Config* config);
+extern ConfigResult config_parse(Config* config, lua_State* lua);
+extern ConfigResult read_config(Config* config, const char* fname);
 
 #endif

@@ -21,12 +21,4 @@ typedef struct {
 extern String string_alloc(char* str);
 extern inline void string_free(String* string);
 
-/*
- * String_Vec
- */
-typedef struct {
-    String* data;
-    size_t len;
-} String_Vec;
-
 #endif
