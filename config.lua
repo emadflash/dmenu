@@ -1,7 +1,7 @@
 dmenu = {}
 
 -- -b  option; if false, dmenu appears at bottom
-dmenu.topbar = true;
+dmenu.topbar = true
 
 dmenu.fonts = {
 	"monospace:size=10"
@@ -22,4 +22,4 @@ dmenu.lines = 0
 
 -- Characters not considered part of a word while deleting words
 --  for example: " /?\"&[]"
-dmenu.worddelimiters = "";
+dmenu.worddelimiters = ""

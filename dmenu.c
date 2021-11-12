@@ -92,16 +92,13 @@ calcoffsets(const Config* config)
 }
 
 static void
-cleanup(void)
+cleanup(Config* config)
 {
-	size_t i;
-
 	XUngrabKey(dpy, AnyKey, AnyModifier, root);
-	for (i = 0; i < SchemeLast; i++)
-		free(scheme[i]);
 	drw_free(drw);
 	XSync(dpy, False);
 	XCloseDisplay(dpy);
+  config_free(config);
 }
 
 static char *
@@ -373,7 +370,7 @@ keypress(Config* config, XKeyEvent *ev)
 		case XK_KP_Enter:
 			break;
 		case XK_bracketleft:
-			cleanup();
+			cleanup(config);
 			exit(1);
 		default:
 			return;
@@ -432,7 +429,7 @@ insert:
 		sel = matchend;
 		break;
 	case XK_Escape:
-		cleanup();
+		cleanup(config);
 		exit(1);
 	case XK_Home:
 	case XK_KP_Home:
@@ -477,7 +474,7 @@ insert:
 	case XK_KP_Enter:
 		puts((sel && !(ev->state & ShiftMask)) ? sel->text : text);
 		if (!(ev->state & ControlMask)) {
-			cleanup();
+			cleanup(config);
 			exit(0);
 		}
 		if (sel)
@@ -561,7 +558,7 @@ readstdin(Config* config)
 }
 
 static void
-run(const Config* config)
+run(Config* config)
 {
 	XEvent ev;
 
@@ -572,7 +569,7 @@ run(const Config* config)
 		case DestroyNotify:
 			if (ev.xdestroywindow.window != win)
 				break;
-			cleanup();
+			cleanup(config);
 			exit(1);
 		case Expose:
 			if (ev.xexpose.count == 0)
@@ -613,21 +610,19 @@ setup(Config* config)
 	Window pw;
 	int a, di, n, area = 0;
 #endif
-	/* init appearance */
-	/*for (j = 0; j < SchemeLast; j++)*/
-		/*scheme[j] = drw_scm_create(drw, colors[j], 2);*/
 
   /*
    * @Changes(emf)
    * drw_scm_create: needs list of colors, say colors[SchemeNorm] which will give it { "..", ".." }
-   */
+   *************************************************************************************************/
   const char* SchemeNorm_arr[] = config_colorsGetCArray(*config, SchemeNorm);
   const char* SchemeSel_arr[] = config_colorsGetCArray(*config, SchemeSel);
   const char* SchemeOut_arr[] = config_colorsGetCArray(*config, SchemeOut);
 
-  scheme[0] = drw_scm_create(drw, SchemeNorm_arr, 2);
-  scheme[1] = drw_scm_create(drw, SchemeSel_arr, 2);
-  scheme[2] = drw_scm_create(drw, SchemeOut_arr, 2);
+  scheme[SchemeNorm] = drw_scm_create(drw, SchemeNorm_arr, 2);
+  scheme[SchemeSel] = drw_scm_create(drw, SchemeSel_arr, 2);
+  scheme[SchemeOut] = drw_scm_create(drw, SchemeOut_arr, 2);
+  /* ******************************************************************************************** */
 
 	clip = XInternAtom(dpy, "CLIPBOARD",   False);
 	utf8 = XInternAtom(dpy, "UTF8_STRING", False);
@@ -719,11 +714,33 @@ usage(void)
 	exit(1);
 }
 
-static String mk_path(const char* path, int psize, const char* fileName, int fsize) {
-    size_t buff_size = psize + fsize + 2;
-    char buff[buff_size];
-    snprintf(buff, buff_size, "%s/%s", path, fileName);
-    return string_alloc(buff);
+char* appendPath(char* parentPath, size_t parentPath_size, const char* files, ...) {
+    va_list ap;
+    va_start(ap, files);
+
+    char* file = files;
+
+    parentPath_size += strlen(file) + 2;
+    char* path = (char*) malloc(parentPath_size);
+
+    snprintf(path, parentPath_size, "%s/%s", parentPath, file);
+
+    file = va_arg(ap, char*);
+
+    if (file != NULL) {
+        do {
+            char oldPath[parentPath_size];
+            memcpy(oldPath, path, parentPath_size);
+
+            parentPath_size += strlen(file) + 2;
+            path = realloc(path, parentPath_size);
+
+            snprintf(path, parentPath_size, "%s/%s", oldPath, file);
+        } while (file = va_arg(ap, char*), file != NULL);
+    }
+
+    va_end(ap);
+    return path;
 }
 
 int
@@ -733,39 +750,42 @@ main(int argc, char *argv[])
   /* @Changes(emf)
    * Checks config file in $XDG_CONFIG_HOME
    * Or read from default config from /usr/local/share/dmenu/config.lua
-   */
+   *************************************************************************************************/
   const char* config_fileName = "config.lua";
   const char* config_rootPath = getenv("XDG_CONFIG_HOME");
 
   Config config;
-  String config_filePath;
+  char* config_filePath;
   ConfigResult result;
 
   if (config_rootPath) {
-      config_filePath = mk_path(config_rootPath, strlen(config_rootPath), config_fileName, strlen(config_fileName));
-      if (access(config_filePath.data, F_OK) != 0) goto dmenu_readFile_default;
+      config_filePath = appendPath(config_rootPath, strlen(config_rootPath), "dmenu", config_fileName, NULL);
+      if (access(config_filePath, F_OK) != 0) goto dmenu_readFile_default;
       goto dmenu_readFile;
   }
 
 dmenu_readFile_default:
-    string_free(&config_filePath);  
+    free(config_filePath);  
     config_rootPath = "/usr/local/share/dmenu";
-    config_filePath = mk_path(config_rootPath, strlen(config_rootPath), config_fileName, strlen(config_fileName));
+    config_filePath = appendPath(config_rootPath, strlen(config_rootPath), config_fileName, NULL);
 
 dmenu_readFile:
-  result = read_config(&config, config_filePath.data);
+  result = read_config(&config, config_filePath);
   if (result != ConfigResult_SUCCESS) {
-      fprintf(stderr, "Err(emf): Reading %s: %s\n", config_filePath.data, ConfigResult_toString(result));
+      fprintf(stderr, "Err(emf): Reading %s: %s\n", config_filePath, ConfigResult_toString(result));
 
-      string_free(&config_filePath);
+      free(config_filePath);
       config_free(&config);
       exit(1);
   }
 
-  string_free(&config_filePath);
+  printf("%s", config_filePath);
+  free(config_filePath);
+  /* ******************************************************************************************** */
 
-  // ------------ Main ---------------
-  //
+  /*
+   * Main
+   */
 	XWindowAttributes wa;
 	int i, fast = 0;
 
@@ -848,8 +868,7 @@ dmenu_readFile:
 	}
 	setup(&config);
 	run(&config);
-
-  config_free(&config);
+  cleanup(&config);
 
 	return 1; /* unreachable */
 }

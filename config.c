@@ -51,8 +51,8 @@ config_free(Config* config) {
         free(config->Fonts.fonts);
     }
 
-     /* Free prompt
-      */
+    /* Free prompt
+     */
     string_free(&(config->prompt));
 
     /* Free Colors
@@ -61,8 +61,8 @@ config_free(Config* config) {
     config_freeColorsBatch(SchemeSel);
     config_freeColorsBatch(SchemeOut);
 
-     /* Free worddelimiters
-      */
+    /* Free worddelimiters
+     */
     string_free(&(config->worddelimiters));
 }
 
@@ -150,7 +150,7 @@ config_parse(Config* config, lua_State* lua) {
             is_visit_fields[1] = 1;
             luaL_checktype(lua, -1, LUA_TTABLE);
             
-            config_parseFonts(&config, lua, -1);
+            config_parseFonts(config, lua, -1);
         } else if (strcmp_withoutCase(Key, "prompt") && !is_visit_fields[2]) {
             is_visit_fields[2] = 1;
             luaL_checktype(lua, -1, LUA_TSTRING);
