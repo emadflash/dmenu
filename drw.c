@@ -5,6 +5,7 @@
 #include <X11/Xlib.h>
 #include <X11/Xft/Xft.h>
 
+#include "string.h"
 #include "drw.h"
 #include "util.h"
 
@@ -103,24 +104,24 @@ drw_free(Drw *drw)
  * drw_fontset_create instead.
  */
 static Fnt *
-xfont_create(Drw *drw, const char *fontname, FcPattern *fontpattern)
+xfont_create(Drw *drw, String fontname, FcPattern *fontpattern)
 {
 	Fnt *font;
 	XftFont *xfont = NULL;
 	FcPattern *pattern = NULL;
 
-	if (fontname) {
+	if (fontname.len > 0) {
 		/* Using the pattern found at font->xfont->pattern does not yield the
 		 * same substitution results as using the pattern returned by
 		 * FcNameParse; using the latter results in the desired fallback
 		 * behaviour whereas the former just results in missing-character
 		 * rectangles being drawn, at least with some fonts. */
-		if (!(xfont = XftFontOpenName(drw->dpy, drw->screen, fontname))) {
-			fprintf(stderr, "error, cannot load font from name: '%s'\n", fontname);
+		if (!(xfont = XftFontOpenName(drw->dpy, drw->screen, fontname.data))) {
+			fprintf(stderr, "error, cannot load font from name: '%s'\n", fontname.data);
 			return NULL;
 		}
-		if (!(pattern = FcNameParse((FcChar8 *) fontname))) {
-			fprintf(stderr, "error, cannot parse font name to pattern: '%s'\n", fontname);
+		if (!(pattern = FcNameParse((FcChar8 *) fontname.data))) {
+			fprintf(stderr, "error, cannot parse font name to pattern: '%s'\n", fontname.data);
 			XftFontClose(drw->dpy, xfont);
 			return NULL;
 		}
@@ -167,7 +168,7 @@ xfont_free(Fnt *font)
 }
 
 Fnt*
-drw_fontset_create(Drw* drw, const char *fonts[], size_t fontcount)
+drw_fontset_create(Drw* drw, const String* fonts, size_t fontcount)
 {
 	Fnt *cur, *ret = NULL;
 	size_t i;
@@ -361,7 +362,8 @@ drw_text(Drw *drw, int x, int y, unsigned int w, unsigned int h, unsigned int lp
 			FcPatternDestroy(fcpattern);
 
 			if (match) {
-				usedfont = xfont_create(drw, NULL, match);
+        const String emptyFont = { .len = 0 };
+				usedfont = xfont_create(drw, emptyFont, match);
 				if (usedfont && XftCharExists(drw->dpy, usedfont->xfont, utf8codepoint)) {
 					for (curfont = drw->fonts; curfont->next; curfont = curfont->next)
 						; /* NOP */

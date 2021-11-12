@@ -11,7 +11,7 @@
 #include <string.h>
 
 String
-string_alloc(char* str) {
+string_alloc(const char* str) {
     String string;
 
     string.len = strlen(str);

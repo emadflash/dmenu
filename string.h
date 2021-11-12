@@ -18,7 +18,7 @@ typedef struct {
     size_t len;
 } String;
 
-extern String string_alloc(char* str);
+extern String string_alloc(const char* str);
 extern inline void string_free(String* string);
 
 #endif

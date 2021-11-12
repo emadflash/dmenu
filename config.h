@@ -10,6 +10,7 @@
 
 #include <stdio.h>
 #include <string.h>
+#include <stdint.h>
 #include <stdbool.h>
 
 #include "string.h"
@@ -59,9 +60,13 @@ typedef struct {
     String worddelimiters;
 } Config;
 
+extern inline void config_set_firstFont(Config* config, char* font);
+extern inline void config_set_prompt(Config* config, char* prompt);
+extern inline void config_set_ColorsSchemeNorm(Config* config, int idx, const char* color);
+extern inline void config_set_ColorsSchemeSel(Config* config, int idx, const char* color);
+extern inline void config_set_ColorsSchemeOut(Config* config, int idx, const char* color);
+
 extern void config_free(Config* config);
-extern void config_parseFonts(Config* config, lua_State* lua, int idx);
-extern void config_parseColors(Config* config, lua_State* lua, int idx);
 extern ConfigResult config_parse(Config* config, lua_State* lua);
 extern ConfigResult read_config(Config* config, const char* fname);
 

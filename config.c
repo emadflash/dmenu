@@ -6,6 +6,7 @@
  *
  */
 #include "config.h"
+#include "string.h"
 
 #include <stdlib.h>
 #include <assert.h>
@@ -66,7 +67,40 @@ config_free(Config* config) {
     string_free(&(config->worddelimiters));
 }
 
-void
+inline void
+config_set_firstFont(Config* config, char* font) {
+    assert(config->Fonts.is_fonts && "At least one font must be specified in config.lua.");
+    string_free(&(config->Fonts.fonts[0]));
+    config->Fonts.fonts[0] = string_alloc(font);
+}
+
+inline void
+config_set_prompt(Config* config, char* prompt) {
+    // emf: Assume config->prompt has some value initialized, and we "free" then change that string
+    assert(config->prompt.data != NULL);
+    string_free(&(config->prompt));
+    config->prompt = string_alloc(prompt);
+}
+
+inline void
+config_set_ColorsSchemeNorm(Config* config, int idx, const char* color) {
+    string_free(&(config->Colors.SchemeNorm[idx]));
+    config->Colors.SchemeNorm[idx] = string_alloc(color);
+}
+
+inline void
+config_set_ColorsSchemeSel(Config* config, int idx, const char* color) {
+    string_free(&(config->Colors.SchemeSel[idx]));
+    config->Colors.SchemeSel[idx] = string_alloc(color);
+}
+
+inline void
+config_set_ColorsSchemeOut(Config* config, int idx, const char* color) {
+    string_free(&(config->Colors.SchemeOut[idx]));
+    config->Colors.SchemeOut[idx] = string_alloc(color);
+}
+
+static void
 config_parseFonts(Config* config, lua_State* lua, int idx) {
     config->Fonts.len = 5;
     config->Fonts.fonts = (String*) malloc(sizeof(String) * config->Fonts.len);
@@ -97,7 +131,7 @@ config_parseFonts(Config* config, lua_State* lua, int idx) {
     config->Fonts.len = entries_counter;
 }
 
-void
+static void
 config_parseColors(Config* config, lua_State* lua, int idx) {
 #define config_parseColorsBatch(X)\
     lua_pushnil(lua);                                             \
@@ -116,7 +150,7 @@ config_parseColors(Config* config, lua_State* lua, int idx) {
     lua_pushnil(lua);
     while ((lua_next(lua, -2)) != 0) {
         luaL_checktype(lua, -1, LUA_TTABLE);
-        char* Key = lua_tostring(lua, -2);
+        const char* Key = lua_tostring(lua, -2);
         
         if (strcmp_withoutCase(Key, "SchemeNorm")) {
             luaL_checktype(lua, -1, LUA_TTABLE);
@@ -139,7 +173,7 @@ config_parse(Config* config, lua_State* lua) {
 
     lua_pushnil(lua);
     while (lua_next(lua, -2) != 0) {
-        char* Key = lua_tostring(lua, -2);
+        const char* Key = lua_tostring(lua, -2);
 
         if (strcmp_withoutCase(Key, "topbar") && !is_visit_fields[0]) {
             is_visit_fields[0] = 1;

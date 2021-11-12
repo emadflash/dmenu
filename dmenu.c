@@ -5,6 +5,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <strings.h>
+#include <assert.h>
 #include <time.h>
 #include <unistd.h>
 
@@ -714,11 +715,11 @@ usage(void)
 	exit(1);
 }
 
-char* appendPath(char* parentPath, size_t parentPath_size, const char* files, ...) {
+char* appendPath(const char* parentPath, size_t parentPath_size, const char* files, ...) {
     va_list ap;
     va_start(ap, files);
 
-    char* file = files;
+    const char* file = files;
 
     parentPath_size += strlen(file) + 2;
     char* path = (char*) malloc(parentPath_size);
@@ -779,7 +780,6 @@ dmenu_readFile:
       exit(1);
   }
 
-  printf("%s", config_filePath);
   free(config_filePath);
   /* ******************************************************************************************** */
 
@@ -794,33 +794,33 @@ dmenu_readFile:
 		if (!strcmp(argv[i], "-v")) {      /* prints version information */
 			puts("dmenu-"VERSION);
 			exit(0);
-		/*} else if (!strcmp(argv[i], "-b")) [> appears at the bottom of the screen <]*/
-			/*topbar = 0;*/
-		/*else if (!strcmp(argv[i], "-f"))   [> grabs keyboard before reading stdin <]*/
-			/*fast = 1;*/
+    } else if (!strcmp(argv[i], "-b")) { /* appears at the bottom of the screen */
+      config.topbar = 0;
+    } else if (!strcmp(argv[i], "-f")) {  /* grabs keyboard before reading stdin */
+      fast = 1;
     } else if (!strcmp(argv[i], "-i")) { /* case-insensitive item matching */
 			fstrncmp = strncasecmp;
 			fstrstr = cistrstr;
-		} else if (i + 1 == argc)
+		} else if (i + 1 == argc) {
 			usage();
 		/* these options take one argument */
-		/*else if (!strcmp(argv[i], "-l"))   [> number of lines in vertical list <]*/
-			/*lines = atoi(argv[++i]);*/
-		else if (!strcmp(argv[i], "-m"))
+		} else if (!strcmp(argv[i], "-l")) { /* number of lines in vertical list */
+      config.lines = atoi(argv[++i]);
+    } else if (!strcmp(argv[i], "-m")) {
 			mon = atoi(argv[++i]);
-		/*else if (!strcmp(argv[i], "-p"))   [> adds prompt to left of input field <]*/
-			/*prompt = argv[++i];*/
-		/*else if (!strcmp(argv[i], "-fn"))  [> font or font set <]*/
-			/*fonts[0] = argv[++i];*/
-		/*else if (!strcmp(argv[i], "-nb"))  [> normal background color <]*/
-			/*colors[SchemeNorm][ColBg] = argv[++i];*/
-		/*else if (!strcmp(argv[i], "-nf"))  [> normal foreground color <]*/
-			/*colors[SchemeNorm][ColFg] = argv[++i];*/
-		/*else if (!strcmp(argv[i], "-sb"))  [> selected background color <]*/
-			/*colors[SchemeSel][ColBg] = argv[++i];*/
-		/*else if (!strcmp(argv[i], "-sf"))  [> selected foreground color <]*/
-			/*colors[SchemeSel][ColFg] = argv[++i];*/
-		else if (!strcmp(argv[i], "-w"))   /* embedding window id */
+    } else if (!strcmp(argv[i], "-p")) { /* adds prompt to left of input field */
+      config_set_prompt(&config, argv[++i]);
+    } else if (!strcmp(argv[i], "-fn")) { /* font or font set */
+      config_set_firstFont(&config, argv[++i]); 
+    } else if (!strcmp(argv[i], "-nb"))  /* normal background color */
+      config_set_ColorsSchemeNorm(&config, ColBg, argv[++i]);
+    else if (!strcmp(argv[i], "-nf"))  /* normal foreground color */
+      config_set_ColorsSchemeNorm(&config, ColFg, argv[++i]);
+    else if (!strcmp(argv[i], "-sb"))  /* selected background color */
+      config_set_ColorsSchemeSel(&config, ColBg, argv[++i]);
+    else if (!strcmp(argv[i], "-sf"))  /* selected foreground color */
+      config_set_ColorsSchemeSel(&config, ColFg, argv[++i]);
+    else if (!strcmp(argv[i], "-w")) /* embedding window id */
 			embed = argv[++i];
 		else
 			usage();
@@ -848,9 +848,7 @@ dmenu_readFile:
       exit(1);
   }
 
-  const char* fonts[] = { config.Fonts.fonts[0].data };
-
-	if (!drw_fontset_create(drw, fonts, 1))
+	if (!drw_fontset_create(drw, config.Fonts.fonts, config.Fonts.len))
 		die("no fonts could be loaded.");
 	lrpad = drw->fonts->h;
 
